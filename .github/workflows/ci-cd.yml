@@ -83,6 +83,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
           script: |
             set -e
             cd /home/ubuntu/mecanica-backend
@@ -98,6 +99,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
           script: |
             for i in $(seq 1 10); do
               code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/auth/login || echo 000)
