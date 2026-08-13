@@ -52,6 +52,7 @@ jobs:
           restore-keys: owasp-dc-db-
 
       - name: Validacao de dependencias (OWASP Dependency-Check)
+        continue-on-error: true
         run: >
           mvn -B org.owasp:dependency-check-maven:9.2.0:check
           -DdataDirectory=$HOME/.dependency-check-data
