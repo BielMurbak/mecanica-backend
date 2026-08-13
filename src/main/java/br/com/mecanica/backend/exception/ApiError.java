@@ -10,4 +10,7 @@ public record ApiError(
         String message,
         Map<String, String> fieldErrors
 ) {
+    public ApiError {
+        fieldErrors = fieldErrors == null ? Map.of() : Map.copyOf(fieldErrors);
+    }
 }
