@@ -28,11 +28,44 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build + testes (mvn verify)
-        run: mvn -B verify
+      - name: Testes unitarios
+        run: mvn -B test -Dtest='!*IntegrationTest'
+
+      - name: Testes de integracao
+        run: mvn -B test -Dtest='*IntegrationTest'
+
+      - name: Build do artefato (mvn package)
+        run: mvn -B package -DskipTests
 
       - name: Analise estatica (SpotBugs)
         run: mvn -B com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:check -Dspotbugs.excludeFilterFile=spotbugs-exclude.xml
+
+      - name: Definir chave de cache semanal (OWASP)
+        id: owasp-cache-key
+        run: echo "week=$(date +'%Y-%U')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache do banco de dados NVD (OWASP Dependency-Check)
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check-data
+          key: owasp-dc-db-${{ steps.owasp-cache-key.outputs.week }}
+          restore-keys: owasp-dc-db-
+
+      - name: Validacao de dependencias (OWASP Dependency-Check)
+        continue-on-error: true
+        run: >
+          mvn -B org.owasp:dependency-check-maven:9.2.0:check
+          -DdataDirectory=$HOME/.dependency-check-data
+          -DfailBuildOnCVSS=9
+          -Dformats=HTML
+          -Dnvd.api.key=${{ secrets.NVD_API_KEY }}
+
+      - name: Upload do relatorio (OWASP Dependency-Check)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.html
 
       - name: Upload do artefato (jar)
         uses: actions/upload-artifact@v4
