@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Falso positivo: injecao de dependencia via construtor (Lombok @RequiredArgsConstructor)
+         em controllers Spring. O SpotBugs nao reconhece services do Spring como seguros. -->
+    <Match>
+        <Class name="~br\.com\.mecanica\.backend\.controller\..*Controller" />
+        <Bug pattern="EI_EXPOSE_REP2" />
+    </Match>
+</FindBugsFilter>
