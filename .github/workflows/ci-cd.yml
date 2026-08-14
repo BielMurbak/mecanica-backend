@@ -40,32 +40,37 @@ jobs:
       - name: Analise estatica (SpotBugs)
         run: mvn -B com.github.spotbugs:spotbugs-maven-plugin:4.8.6.6:check -Dspotbugs.excludeFilterFile=spotbugs-exclude.xml
 
-      - name: Definir chave de cache semanal (OWASP)
-        id: owasp-cache-key
+      - name: Definir chave de cache semanal (Trivy)
+        id: trivy-cache-key
         run: echo "week=$(date +'%Y-%U')" >> "$GITHUB_OUTPUT"
 
-      - name: Cache do banco de dados NVD (OWASP Dependency-Check)
+      - name: Cache do banco de vulnerabilidades (Trivy)
         uses: actions/cache@v4
         with:
-          path: ~/.dependency-check-data
-          key: owasp-dc-db-${{ steps.owasp-cache-key.outputs.week }}
-          restore-keys: owasp-dc-db-
+          path: ${{ github.workspace }}/.cache/trivy
+          key: trivy-db-${{ steps.trivy-cache-key.outputs.week }}
+          restore-keys: trivy-db-
 
-      - name: Validacao de dependencias (OWASP Dependency-Check)
-        continue-on-error: true
-        run: >
-          mvn -B org.owasp:dependency-check-maven:9.2.0:check
-          -DdataDirectory=$HOME/.dependency-check-data
-          -DfailBuildOnCVSS=9
-          -Dformats=HTML
-          -Dnvd.api.key=${{ secrets.NVD_API_KEY }}
+      - name: Validacao de dependencias (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL
+          format: table
+          output: trivy-report.txt
+          exit-code: '1'
+          ignore-unfixed: true
 
-      - name: Upload do relatorio (OWASP Dependency-Check)
+      - name: Upload do relatorio (Trivy)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dependency-check-report
-          path: target/dependency-check-report.html
+          name: trivy-report
+          path: trivy-report.txt
 
       - name: Upload do artefato (jar)
         uses: actions/upload-artifact@v4
