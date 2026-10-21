@@ -1,0 +1,116 @@
+Evidência da demonstração - 21/10/2026 20:20
+
+================ 1. kubectl get pods -n mecanica -o wide ================
+$ kubectl get pods -n mecanica -o wide
+NAME                        READY   STATUS    RESTARTS   AGE    IP            NODE       NOMINATED NODE   READINESS GATES
+backend-5c5cfb7758-mrr7p    1/1     Running   0          2m8s   10.244.0.18   minikube   <none>           <none>
+backend-5c5cfb7758-qnzww    1/1     Running   0          2m9s   10.244.0.15   minikube   <none>           <none>
+frontend-79fd677b8b-cw5rb   1/1     Running   0          2m8s   10.244.0.16   minikube   <none>           <none>
+frontend-79fd677b8b-jfpxt   1/1     Running   0          2m8s   10.244.0.17   minikube   <none>           <none>
+postgres-768fb75fd8-sktwd   1/1     Running   0          2m3s   10.244.0.19   minikube   <none>           <none>
+
+================ 2. kubectl get services -n mecanica ================
+$ kubectl get services -n mecanica
+NAME       TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+backend    ClusterIP   10.97.151.110    <none>        8080/TCP       2m10s
+frontend   NodePort    10.107.49.40     <none>        80:30080/TCP   2m10s
+postgres   ClusterIP   10.104.196.128   <none>        5432/TCP       2m4s
+
+================ 3. kubectl get deployments -n mecanica ================
+$ kubectl get deployments -n mecanica
+NAME       READY   UP-TO-DATE   AVAILABLE   AGE
+backend    2/2     2            2           2m11s
+frontend   2/2     2            2           2m11s
+postgres   1/1     1            1           2m6s
+
+================ 4. ConfigMap e Secret (describe) ================
+$ kubectl get configmap,secret -n mecanica
+NAME                         DATA   AGE
+configmap/backend-config     4      2m11s
+configmap/frontend-config    1      2m11s
+configmap/kube-root-ca.crt   1      2m12s
+
+NAME                     TYPE     DATA   AGE
+secret/backend-secret    Opaque   3      2m11s
+secret/postgres-secret   Opaque   3      2m9s
+$ kubectl describe secret backend-secret -n mecanica
+Name:         backend-secret
+Namespace:    mecanica
+Labels:       <none>
+Annotations:  <none>
+
+Type:  Opaque
+
+Data
+====
+APP_ADMIN_PASSWORD:          8 bytes
+SPRING_DATASOURCE_PASSWORD:  17 bytes
+SPRING_DATASOURCE_USERNAME:  8 bytes
+
+================ 5. Volume persistente (PVC) ================
+$ kubectl get pvc -n mecanica
+NAME           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+postgres-pvc   Bound    pvc-87d013fb-63ef-4f8b-be24-ca03e7567460   1Gi        RWO            standard       <unset>                 2m8s
+
+================ 6. Balanceamento de carga (20 chamadas ao Service frontend, de dentro do cluster) ================
+$ kubectl run lb-teste --restart=Never --image=curlimages/curl -n mecanica -- sh -c "20x: curl -s -I http://frontend/ | grep -i x-served-by"
+fase: Succeeded
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-cw5rb
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-jfpxt
+X-Served-By: frontend-79fd677b8b-cw5rb
+--- resumo (contagem por Pod):
+      9 X-Served-By: frontend-79fd677b8b-cw5rb
+     11 X-Served-By: frontend-79fd677b8b-jfpxt
+
+================ 7. Auto-recuperação: apagar um Pod do backend ================
+$ kubectl get pods -n mecanica -l app=backend   (antes)
+NAME                       READY   STATUS    RESTARTS   AGE
+backend-5c5cfb7758-mrr7p   1/1     Running   0          3m13s
+backend-5c5cfb7758-qnzww   1/1     Running   0          3m14s
+$ kubectl delete pod backend-5c5cfb7758-mrr7p -n mecanica
+pod "backend-5c5cfb7758-mrr7p" deleted from mecanica namespace
+$ kubectl get pods -n mecanica -l app=backend   (4s depois: o antigo termina e um novo nasce)
+NAME                       READY   STATUS        RESTARTS   AGE
+backend-5c5cfb7758-7b6gt   0/1     Init:0/1      0          5s
+backend-5c5cfb7758-mrr7p   1/1     Terminating   0          3m19s
+backend-5c5cfb7758-qnzww   1/1     Running       0          3m20s
+deployment "backend" successfully rolled out
+$ kubectl get pods -n mecanica -l app=backend   (depois: 2/2 de novo)
+NAME                       READY   STATUS    RESTARTS   AGE
+backend-5c5cfb7758-7b6gt   1/1     Running   0          63s
+backend-5c5cfb7758-qnzww   1/1     Running   0          4m18s
+
+================ 8. Aplicação: login e CRUD pelo frontend (nginx -> backend -> postgres) ================
+$ POST /api/auth/login (admin)
+HTTP/1.1 200 
+X-Backend-Pod: backend-5c5cfb7758-7b6gt
+{"username":"admin","role":"ADMIN"}
+$ POST /api/mecanicos (cadastra Carlos Teste)
+{"id":1,"nome":"Carlos Teste","especialidade":"Motor","telefone":"41999990000","email":"carlos@teste.com","ativo":true}
+
+================ 9. Persistência: apagar o Pod do Postgres e consultar de novo ================
+$ kubectl delete pod -l app=postgres -n mecanica
+pod "postgres-768fb75fd8-sktwd" deleted from mecanica namespace
+deployment "postgres" successfully rolled out
+$ kubectl get pods -n mecanica -l app=postgres  (Pod novo, nome diferente)
+NAME                        READY   STATUS    RESTARTS   AGE
+postgres-768fb75fd8-rn2zt   1/1     Running   0          11s
+$ GET /api/mecanicos (o dado continua lá)
+[{"id":1,"nome":"Carlos Teste","especialidade":"Motor","telefone":"41999990000","email":"carlos@teste.com","ativo":true}]

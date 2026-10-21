@@ -5,6 +5,7 @@ import br.com.mecanica.backend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +30,11 @@ public class DataSeeder implements CommandLineRunner {
                     .password(passwordEncoder.encode(adminPassword))
                     .role("ADMIN")
                     .build();
-            usuarioRepository.save(admin);
+            try {
+                usuarioRepository.save(admin);
+            } catch (DataIntegrityViolationException e) {
+                // outra réplica criou o admin ao mesmo tempo (username é único)
+            }
         }
     }
 }
